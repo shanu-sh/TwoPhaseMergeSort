@@ -52,6 +52,7 @@ def parseinput(cmddata):
 		columns.append(cmddata[i])
 		i+=1
 
+	columns=columns[0].split(',')
 	return input_file,output_file,size,nthread,code,columns
 
 def printstats(nooflines):
