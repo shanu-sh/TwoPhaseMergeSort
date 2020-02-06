@@ -46,6 +46,13 @@ def parseinput(cmddata):
 	size=int(cmddata[3])*1024*1024
 	nthread=int(cmddata[4])
 	code=cmddata[5]
+	if(code=='dsc'):
+		flag=True
+	elif(code=='asc'):
+		flag=False
+	else:
+		print('PLease specify the correct sorting order')
+		exit()
 	columns=[]
 	i=6
 	while(i<len(cmddata)):
@@ -53,19 +60,15 @@ def parseinput(cmddata):
 		i+=1
 
 	columns=columns[0].split(',')
-	return input_file,output_file,size,nthread,code,columns
+	return input_file,output_file,size,nthread,flag,columns
 
-def printstats(nooflines):
+def printstats():
 	print('size of 1 tuple in bytes is',sizeoftuple())
-	print('size of input file in bytes',sizeofinputfile(len(lines)))
 	print('main memory allowed in bytes ',mainmemorysize)
 	print('size of chunk size is ',chunksize)
 
 def sizeoftuple():
 	return sum(colmapping.values())
-
-def sizeofinputfile(nooflines):
-	return nooflines*sizeoftuple()
 
 def calcchunksize():
 	return math.floor(mainmemorysize/sizeoftuple())
@@ -92,11 +95,13 @@ def keyindices(x,columns):
 		a.append(x[colindexing[i]])
 	return a
 
-def sortdata(lines,columns):
-	lines=sorted(lines,key=lambda x: keyindices(x,columns))
-	return lines
+def sortdata(lines,columns,flag):
+	if(flag==True):
+		return sorted(lines,key=lambda x: keyindices(x,columns),reverse=True)
+	else:
+		return sorted(lines,key=lambda x: keyindices(x,columns))
 
-def splitdata_sorted(filename,columns):
+def splitdata_sorted(filename,columns,flag):
 	filearray=[]
 	findex=0
 	f1=open(filename)
@@ -109,12 +114,10 @@ def splitdata_sorted(filename,columns):
 
 		if(count==chunksize):
 
-			#Sort the sublist and store in memory
 			filearray.append('temp'+str(findex)+'.txt')
 			t=filearray[findex]
-			print(t)
 			f2=open(t,'w')
-			tempresult=sortdata(tempresult,columns)
+			tempresult=sortdata(tempresult,columns,flag)
 			writelistoflist(f2,tempresult)
 			tempresult=[]
 			count=0
@@ -129,55 +132,66 @@ def splitdata_sorted(filename,columns):
 	if(count>0):
 		filearray.append('temp'+str(findex)+'.txt')
 		f2=open(filearray[findex],'w')
-		tempresult=sortdata(tempresult,columns)
+		tempresult=sortdata(tempresult,columns,flag)
 		writelistoflist(f2,tempresult)
 		f2.close()
 		findex+=1
 	f1.close()
 	return filearray
 
-def lessthan(l1,l2,columns):
-	for j in columns:
-		i=colindexing[j]
-		if(l1[i]<l2[i]):
-			return True
-		elif(l1[i]==l2[i]):
-			continue
-		else:
-			return False
-	return False
+def compare(l1,l2,columns,flag):
+	if(flag):
+		for j in columns:
+			i=colindexing[j]
+			if(l1[i]>l2[i]):
+				return True
+			elif(l1[i]==l2[i]):
+				continue
+			else:
+				return False
+		return False
+	else:
+		for j in columns:
+			i=colindexing[j]
+			if(l1[i]<l2[i]):
+				return True
+			elif(l1[i]==l2[i]):
+				continue
+			else:
+				return False
+		return False
 
-def minheapify(i,columns):
+def minheapify(i,columns,flag):
 	temp=Node()
 
 	l=2*i+1
 	r=2*i+2
 	small=-1
-	if(l<len(heap) and lessthan(heap[l].data,heap[i].data,columns)):
+	if(l<len(heap) and compare(heap[l].data,heap[i].data,columns,flag)):
 		small=l
 	else:
 		small=i
 
-	if(r<len(heap) and lessthan(heap[r].data,heap[small].data,columns)):
+	if(r<len(heap) and compare(heap[r].data,heap[small].data,columns,flag)):
 		small=r
 
 	if(small!=i):
 		temp=heap[small]
 		heap[small]=heap[i]
 		heap[i]=temp
-		minheapify(small,columns)
+		minheapify(small,columns,flag)
 
-def buildminheap(columns):
+def buildminheap(columns,flag):
 	i=len(heap)-1
 	while(i>=0):
-		minheapify(i,columns)
+		minheapify(i,columns,flag)
 		i-=1
 
-def adjust(pos,columns):
+def adjust(pos,columns,flag):
 	child=pos
 	parent=math.floor((child-1)/2)
 
-	while(parent>=0 and lessthan(heap[child].data,heap[parent].data,columns)):
+	while(parent>=0 and compare(heap[child].data,heap[parent].data,columns,flag)):
 		temp=heap[child]
 		heap[child]=heap[parent]
 		heap[parent]=temp
@@ -185,20 +199,18 @@ def adjust(pos,columns):
 		child=parent
 		parent=math.floor((child-1)/2)
 
-def removemin(columns):
+def removemin(columns,flag):
 	temp=heap[0]
 	
 	heap[0]=heap[len(heap)-1]
 	heap.pop()
 
-	minheapify(0,columns)
+	minheapify(0,columns,flag)
 	return temp
 
-def mergesplittedfiles(filearray,columns):
-	print(len(filearray))
-	
-	filepointer=[None]*len(filearray)
+def mergesplittedfiles(filearray,columns,flag):
 
+	filepointer=[None]*len(filearray)
 	for i in range(len(filearray)):
 		filepointer[i]=open(filearray[i])
 		data=readoneline(filepointer[i])
@@ -207,13 +219,13 @@ def mergesplittedfiles(filearray,columns):
 		temp.data=data
 		heap.append(temp)
 
-	buildminheap(columns)
+	buildminheap(columns,flag)
 
 	fpwrite=open('tempoutput.txt','w')
 	fileclosecount=0
 
 	while(fileclosecount!=len(filearray)):
-		temp=removemin(columns)
+		temp=removemin(columns,flag)
 		result=[]
 		result.append(temp.data)
 		writelistoflist(fpwrite,result)
@@ -222,7 +234,7 @@ def mergesplittedfiles(filearray,columns):
 		if(len(data)!=0):
 			temp.data=data
 			heap.append(temp)
-			adjust(len(heap)-1,columns)
+			adjust(len(heap)-1,columns,flag)
 		else:
 			fileclosecount+=1
 
@@ -230,18 +242,15 @@ def mergesplittedfiles(filearray,columns):
 		filepointer[i]=open(filearray[i])
 	return 1
 
-#execution begins here
 cmddata=sys.argv
 if(len(cmddata)<6):
 	print('PLease enter all parameter')
 else:
-	input_file,output_file,mainmemorysize,nthread,code,columns=parseinput(cmddata)
+	input_file,output_file,mainmemorysize,nthread,flag,columns=parseinput(cmddata)
 	readmetadata('metadata.txt')
 	chunksize=calcchunksize()
 
-	lines=readfile(input_file)
-	printstats(len(lines))
+	printstats()
 	
-	filearray=splitdata_sorted(input_file,columns)
-	mergesplittedfiles(filearray,columns)
-
+	filearray=splitdata_sorted(input_file,columns,flag)
+	mergesplittedfiles(filearray,columns,flag)
